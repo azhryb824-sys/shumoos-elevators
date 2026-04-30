@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>مؤسسة شموس للمصاعد | تعاقد صيانة مكة وجدة</title>
+  <meta name="description" content="مؤسسة شموس للمصاعد تقدم خدمات تعاقد وصيانة مصاعد في مكة وجدة مع نموذج طلب مباشر عبر واتساب." />
+  <meta name="robots" content="index,follow" />
+  <meta name="theme-color" content="#0f766e" />
+  <meta property="og:title" content="مؤسسة شموس للمصاعد" />
+  <meta property="og:description" content="خدمات تعاقد وصيانة مصاعد في مكة وجدة مع طلب مباشر عبر واتساب." />
+  <meta property="og:type" content="website" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="site.webmanifest" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="hero" id="top" data-bg="heroBg">
+    <nav class="navbar container">
+      <a href="#top" class="brand">شموس للمصاعد</a>
+      <div class="nav-links">
+        <a href="#services">خدماتنا</a>
+        <a href="#coverage">نطاق الخدمة</a>
+        <a href="#contract">طلب التعاقد</a>
+        <a href="admin.html" class="admin-link">لوحة التحكم</a>
+        <a href="#contract" class="btn btn-outline" data-content="navCta">طلب خدمة</a>
+      </div>
+    </nav>
+
+    <section class="hero-content container">
+      <div>
+        <p class="badge" data-content="heroBadge">صيانة دورية • طوارئ • معاينة حسب الطلب</p>
+        <h1 data-content="heroTitle">تعاقد صيانة مصاعد موثوق في مكة وجدة</h1>
+        <p class="lead" data-content="heroText">
+          نقدم خطط صيانة سنوية وشهرية للمصاعد السكنية والتجارية مع زيارات دورية،
+          استجابة سريعة للأعطال، وتقارير فنية واضحة تساعدك على رفع مستوى السلامة وتقليل التوقفات.
+        </p>
+        <div class="hero-actions">
+          <a href="#contract" class="btn btn-primary">ابدأ طلب التعاقد الآن</a>
+          <a href="#plans" class="btn btn-light">عرض خطط الصيانة</a>
+        </div>
+      </div>
+      <aside class="hero-card">
+        <img class="section-image" data-image="heroImage" alt="صورة قسم المقدمة" hidden>
+        <h2 data-content="whyTitle">لماذا شموس للمصاعد؟</h2>
+        <ul id="whyList"></ul>
+      </aside>
+    </section>
+  </header>
+
+  <main>
+    <section id="services" class="section section-bg" data-bg="servicesBg">
+      <div class="container">
+        <h2 data-content="servicesTitle">خدمات الصيانة</h2>
+        <div class="grid three" id="servicesGrid"></div>
+      </div>
+    </section>
+
+    <section id="coverage" class="section section-soft section-bg" data-bg="coverageBg">
+      <div class="container split">
+        <div>
+          <h2 data-content="coverageTitle">نطاق التغطية</h2>
+          <p data-content="coverageText">نوفر خدماتنا الميدانية داخل:</p>
+          <ul class="city-list" id="coverageList"></ul>
+        </div>
+        <div class="service-panel">
+          <img class="section-image" data-image="coverageImage" alt="صورة نطاق الخدمة" hidden>
+          <h3 data-content="panelTitle">جاهز لاستقبال الطلبات</h3>
+          <p data-content="panelText">
+            يجمع النموذج بيانات الجهة، المدينة، عدد المصاعد، المسؤول، رقم الجوال والملاحظات،
+            ثم يفتح واتساب برسالة مرتبة يمكن إرسالها مباشرة لفريق العمل.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="plans" class="section section-bg" data-bg="plansBg">
+      <div class="container">
+        <h2 data-content="plansTitle">خطط التعاقد</h2>
+        <div class="grid three" id="plansGrid"></div>
+      </div>
+    </section>
+
+    <section id="contract" class="section section-contract section-bg" data-bg="contractBg">
+      <div class="container">
+        <h2 data-content="contractTitle">طلب تعاقد صيانة</h2>
+        <p class="lead small" data-content="contractText">املأ النموذج التالي وسيتم فتح واتساب برسالة جاهزة تحتوي على تفاصيل الطلب.</p>
+
+        <form class="contract-form" id="contractForm">
+          <label>
+            اسم الجهة / المبنى
+            <input type="text" name="entity" autocomplete="organization" required>
+          </label>
+
+          <label>
+            المدينة
+            <select name="city" required>
+              <option value="">اختر المدينة</option>
+              <option value="مكة">مكة المكرمة</option>
+              <option value="جدة">جدة</option>
+            </select>
+          </label>
+
+          <label>
+            عدد المصاعد
+            <input type="number" name="elevators" min="1" required>
+          </label>
+
+          <label>
+            اسم المسؤول
+            <input type="text" name="contact" autocomplete="name" required>
+          </label>
+
+          <label>
+            رقم الجوال
+            <input type="tel" name="phone" inputmode="tel" pattern="05[0-9]{8}" placeholder="05XXXXXXXX" required>
+          </label>
+
+          <label class="full">
+            ملاحظات إضافية
+            <textarea name="notes" rows="4"></textarea>
+          </label>
+
+          <button type="submit" class="btn btn-primary full">إرسال طلب التعاقد</button>
+        </form>
+
+        <p id="formMessage" class="form-message" aria-live="polite"></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-wrap">
+      <p>© 2026 مؤسسة شموس للمصاعد - مكة وجدة</p>
+      <a href="#contract">طلب تعاقد</a>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

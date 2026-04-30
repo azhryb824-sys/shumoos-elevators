@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>لوحة تحكم شموس للمصاعد</title>
+  <meta name="robots" content="noindex,nofollow" />
+  <meta name="theme-color" content="#0f172a" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="admin-page">
+  <main class="login-screen" id="loginScreen">
+    <form class="login-card" id="loginForm">
+      <p class="badge">دخول المشرف</p>
+      <h1>لوحة تحكم شموس للمصاعد</h1>
+      <label>
+        اسم المستخدم
+        <input type="text" name="username" autocomplete="username" required>
+      </label>
+      <label>
+        كلمة المرور
+        <input type="password" name="password" autocomplete="current-password" required>
+      </label>
+      <button type="submit" class="btn btn-primary">دخول</button>
+      <p id="loginMessage" class="form-message error" aria-live="polite"></p>
+      <a href="index.html">العودة للموقع</a>
+    </form>
+  </main>
+
+  <div id="adminShell" hidden>
+  <header class="admin-header">
+    <div class="container admin-header-wrap">
+      <div>
+        <p class="badge">إدارة المحتوى</p>
+        <h1>لوحة تحكم الموقع</h1>
+      </div>
+      <div class="admin-actions">
+        <a href="index.html" class="btn btn-light">عرض الموقع</a>
+        <button type="button" class="btn btn-light" id="logoutButton">خروج</button>
+        <button type="button" class="btn btn-outline" id="resetContent">استعادة المحتوى الافتراضي</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="section container">
+    <form id="adminForm" class="admin-form">
+      <section class="admin-panel">
+        <h2>القسم الرئيسي</h2>
+        <div class="admin-grid">
+          <label>الشعار <input name="brand" type="text"></label>
+          <label>
+            رقم واتساب لاستقبال طلبات العقود
+            <input name="whatsappNumber" type="tel" inputmode="tel" pattern="(00)?9665[0-9]{8}|05[0-9]{8}" placeholder="00966551800192">
+          </label>
+          <label>شارة القسم <input name="heroBadge" type="text"></label>
+          <label class="full">العنوان الرئيسي <input name="heroTitle" type="text"></label>
+          <label class="full">الوصف <textarea name="heroText" rows="4"></textarea></label>
+          <label class="full">عنوان بطاقة لماذا <input name="whyTitle" type="text"></label>
+          <label class="full">صورة القسم الرئيسي <input name="heroImage" type="file" accept="image/*"></label>
+          <label class="full">خلفية القسم الرئيسي <input name="heroBg" type="file" accept="image/*"></label>
+        </div>
+      </section>
+
+      <section class="admin-panel">
+        <div class="panel-heading">
+          <h2>نقاط التميز</h2>
+          <button type="button" class="btn btn-light" data-add-list="whyItems">إضافة نقطة</button>
+        </div>
+        <div class="repeat-list" id="whyItemsEditor"></div>
+      </section>
+
+      <section class="admin-panel">
+        <div class="panel-heading">
+          <h2>الخدمات</h2>
+          <button type="button" class="btn btn-light" data-add-list="services">إضافة خدمة</button>
+        </div>
+        <div class="admin-grid">
+          <label class="full">عنوان القسم <input name="servicesTitle" type="text"></label>
+          <label class="full">خلفية قسم الخدمات <input name="servicesBg" type="file" accept="image/*"></label>
+        </div>
+        <div class="repeat-list" id="servicesEditor"></div>
+      </section>
+
+      <section class="admin-panel">
+        <div class="panel-heading">
+          <h2>نطاق الخدمة</h2>
+          <button type="button" class="btn btn-light" data-add-list="coverageItems">إضافة مدينة</button>
+        </div>
+        <div class="admin-grid">
+          <label>عنوان القسم <input name="coverageTitle" type="text"></label>
+          <label>عنوان اللوحة الجانبية <input name="panelTitle" type="text"></label>
+          <label class="full">وصف نطاق الخدمة <textarea name="coverageText" rows="3"></textarea></label>
+          <label class="full">نص اللوحة الجانبية <textarea name="panelText" rows="4"></textarea></label>
+          <label class="full">صورة نطاق الخدمة <input name="coverageImage" type="file" accept="image/*"></label>
+          <label class="full">خلفية قسم نطاق الخدمة <input name="coverageBg" type="file" accept="image/*"></label>
+        </div>
+        <div class="repeat-list" id="coverageItemsEditor"></div>
+      </section>
+
+      <section class="admin-panel">
+        <div class="panel-heading">
+          <h2>خطط التعاقد</h2>
+          <button type="button" class="btn btn-light" data-add-list="plans">إضافة خطة</button>
+        </div>
+        <div class="admin-grid">
+          <label class="full">عنوان القسم <input name="plansTitle" type="text"></label>
+          <label class="full">خلفية قسم الخطط <input name="plansBg" type="file" accept="image/*"></label>
+        </div>
+        <div class="repeat-list" id="plansEditor"></div>
+      </section>
+
+      <section class="admin-panel">
+        <h2>نموذج الطلب</h2>
+        <div class="admin-grid">
+          <label>عنوان النموذج <input name="contractTitle" type="text"></label>
+          <label>زر القائمة <input name="navCta" type="text"></label>
+          <label class="full">وصف النموذج <textarea name="contractText" rows="3"></textarea></label>
+          <label class="full">خلفية قسم نموذج الطلب <input name="contractBg" type="file" accept="image/*"></label>
+        </div>
+      </section>
+
+      <div class="save-bar">
+        <p id="adminMessage" aria-live="polite"></p>
+        <button type="submit" class="btn btn-primary">حفظ التغييرات</button>
+      </div>
+    </form>
+  </main>
+  </div>
+
+  <script src="script.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

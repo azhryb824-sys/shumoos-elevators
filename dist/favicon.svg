@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Shumoos elevators">
+  <rect width="64" height="64" rx="14" fill="#0f766e"/>
+  <path d="M18 48h28V16H18v32Zm7-25h14v18H25V23Z" fill="#f8fafc"/>
+  <path d="M28 13 32 7l4 6h-8Zm8 38-4 6-4-6h8Z" fill="#f59e0b"/>
+</svg>
