@@ -1,64 +1,224 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const PORT = Number(process.env.PORT || 3000);
-const HOST = process.env.HOST || '0.0.0.0';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'AtharMakkah2026!';
+const COOKIE_NAME = 'waqf_admin_session';
+const SESSION_MAX_AGE = 8 * 60 * 60;
+const sessions = new Map();
 
-const projects = [
-  { id: 1, title: 'سقيا الماء', description: 'توفير مياه الشرب في المواقع ذات الاحتياج بمكة المكرمة.', target: 180000, collected: 126500, icon: '💧' },
-  { id: 2, title: 'دعم الأسر المتعففة', description: 'مساندة الأسر المستحقة ببرامج مدروسة تحفظ الكرامة.', target: 250000, collected: 167900, icon: '⌂' },
-  { id: 3, title: 'تعليم القرآن', description: 'دعم حلقات تعليم القرآن والبرامج التعليمية النوعية.', target: 120000, collected: 86400, icon: '✦' }
-];
+const logoDir = path.join(__dirname, 'logo-webp-payload');
+const logoParts = (await fs.readdir(logoDir))
+  .filter((name) => /^part-\d+\.txt$/.test(name))
+  .sort();
+if (!logoParts.length) throw new Error('Logo payload is missing.');
+const logoBase64 = (await Promise.all(logoParts.map((name) => fs.readFile(path.join(logoDir, name), 'utf8')))).join('');
+const logoBuffer = Buffer.from(logoBase64, 'base64');
 
-const products = [
-  { id: 1, name: 'بخور الأثر', price: 95, category: 'عطور وبخور', stock: 42, description: 'بخور فاخر بتغليف يحمل هوية الوقف.' },
-  { id: 2, name: 'هدية مكة', price: 145, category: 'هدايا', stock: 28, description: 'باقة هدايا أنيقة مستوحاة من مكة المكرمة.' },
-  { id: 3, name: 'تمر فاخر', price: 75, category: 'منتجات محلية', stock: 65, description: 'تمر مختار بعناية في عبوة مناسبة للإهداء.' },
-  { id: 4, name: 'حقيبة المعتمر', price: 120, category: 'مستلزمات العمرة', stock: 19, description: 'حقيبة عملية تحتوي على مستلزمات أساسية للمعتمر.' }
-];
+function parseCookies(header = '') {
+  return Object.fromEntries(header.split(';').map((part) => part.trim()).filter(Boolean).map((part) => {
+    const index = part.indexOf('=');
+    return index === -1 ? [part, ''] : [part.slice(0, index), decodeURIComponent(part.slice(index + 1))];
+  }));
+}
 
-const state = {
-  contributions: 348,
-  beneficiaries: 1260,
-  completedProjects: 18,
-  partners: 12,
-  orders: 54,
-  storeRevenue: 46320
+function getSession(req) {
+  const token = parseCookies(req.headers.cookie || '')[COOKIE_NAME];
+  if (!token) return null;
+  const record = sessions.get(token);
+  if (!record || record.expiresAt <= Date.now()) {
+    sessions.delete(token);
+    return null;
+  }
+  record.expiresAt = Date.now() + SESSION_MAX_AGE * 1000;
+  return record;
+}
+
+function safeEqual(a, b) {
+  const left = crypto.createHash('sha256').update(String(a)).digest();
+  const right = crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(left, right);
+}
+
+function readBody(req, limit = 64 * 1024) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.setEncoding('utf8');
+    req.on('data', (chunk) => {
+      body += chunk;
+      if (body.length > limit) reject(new Error('Request body is too large.'));
+    });
+    req.on('end', () => resolve(body));
+    req.on('error', reject);
+  });
+}
+
+function send(res, status, body, headers = {}) {
+  res.writeHead(status, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-store, max-age=0',
+    ...headers,
+  });
+  res.end(body);
+}
+
+function redirect(res, location) {
+  res.writeHead(302, { Location: location, 'Cache-Control': 'no-store' });
+  res.end();
+}
+
+function loginPage(error = '') {
+  const safeError = String(error).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+  return `<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0d2b46">
+<title>تسجيل الدخول | وقف الأثر الجميل</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="icon" href="/assets/logo.png?v=3" type="image/webp">
+<style>
+:root{--navy:#0d2b46;--navy2:#153f61;--gold:#b38b4d;--cream:#f7f3ea;--paper:#fffdf8;--text:#1e2933;--muted:#687783;--line:#e5d8c3;--danger:#a63b3b}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;font-family:'Cairo',Tahoma,Arial,sans-serif;background:radial-gradient(circle at 15% 15%,rgba(179,139,77,.15),transparent 30%),linear-gradient(135deg,#071b2c,#0d2b46 58%,#174d73);display:grid;place-items:center;padding:24px;color:var(--text)}
+.login-shell{width:min(1040px,100%);display:grid;grid-template-columns:1fr .92fr;background:var(--paper);border-radius:30px;overflow:hidden;box-shadow:0 35px 90px rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.2)}
+.identity{padding:58px 46px;background:linear-gradient(145deg,rgba(13,43,70,.98),rgba(25,78,112,.96));color:#fff;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden}.identity:before,.identity:after{content:'';position:absolute;border:1px solid rgba(213,183,124,.22);border-radius:50%}.identity:before{width:330px;height:330px;top:-180px;right:-150px}.identity:after{width:240px;height:240px;bottom:-130px;left:-100px}
+.identity img{width:min(260px,78%);height:auto;background:#fffaf1;border-radius:22px;padding:10px;box-shadow:0 22px 55px rgba(0,0,0,.22);position:relative}.identity h1{font-size:30px;margin:24px 0 4px;position:relative}.identity p{margin:0;color:#d8e4eb;position:relative}.form-side{padding:56px 48px;display:flex;flex-direction:column;justify-content:center}.form-side small{color:var(--gold);font-weight:800}.form-side h2{color:var(--navy);font-size:32px;margin:6px 0}.form-side>p{color:var(--muted);margin:0 0 28px}.field{display:grid;gap:7px;margin-bottom:17px}.field label{font-weight:700;color:var(--navy)}.field input{width:100%;border:1px solid var(--line);border-radius:13px;padding:13px 15px;background:#fff;font:inherit;outline:none;transition:.2s}.field input:focus{border-color:var(--gold);box-shadow:0 0 0 4px rgba(179,139,77,.12)}.submit{width:100%;border:0;border-radius:13px;padding:14px 18px;background:linear-gradient(135deg,var(--gold),#c9a260);color:#fff;font:800 16px 'Cairo',sans-serif;cursor:pointer;box-shadow:0 12px 28px rgba(179,139,77,.25)}.submit:disabled{opacity:.65;cursor:wait}.message{min-height:27px;color:var(--danger);font-size:14px;margin-top:10px}.back{display:inline-flex;margin-top:18px;color:var(--navy);font-weight:700}.security{margin-top:22px;padding:12px 14px;background:#f4eee4;border-radius:12px;color:var(--muted);font-size:12px}
+@media(max-width:780px){.login-shell{grid-template-columns:1fr}.identity{padding:30px 24px}.identity img{width:175px}.identity h1{font-size:23px}.form-side{padding:36px 24px}.form-side h2{font-size:27px}}
+</style>
+</head>
+<body>
+<main class="login-shell">
+<section class="identity"><img src="/assets/logo.png?v=3" alt="شعار وقف الأثر الجميل"><h1>وقف الأثر الجميل</h1><p>مكة المكرمة</p></section>
+<section class="form-side"><small>النظام الإداري</small><h2>تسجيل الدخول</h2><p>أدخل بيانات حسابك للوصول إلى لوحة إدارة الوقف والمتجر.</p>
+<form id="loginForm" autocomplete="on">
+<div class="field"><label for="username">اسم المستخدم</label><input id="username" name="username" autocomplete="username" required autofocus></div>
+<div class="field"><label for="password">كلمة المرور</label><input id="password" name="password" type="password" autocomplete="current-password" required></div>
+<button class="submit" type="submit">دخول آمن إلى النظام</button><div class="message" id="message">${safeError}</div>
+</form>
+<a class="back" href="/">العودة إلى الموقع العام ←</a><div class="security">صفحة الدخول محمية بجلسة آمنة، ولا تُعرض لوحة الإدارة قبل نجاح التحقق.</div>
+</section></main>
+<script>
+const form=document.getElementById('loginForm'),message=document.getElementById('message'),button=form.querySelector('button');
+form.addEventListener('submit',async(event)=>{event.preventDefault();message.textContent='';button.disabled=true;button.textContent='جارٍ التحقق...';try{const response=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:form.username.value.trim(),password:form.password.value})});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.message||'تعذر تسجيل الدخول.');location.replace('/admin/');}catch(error){message.textContent=error.message||'بيانات الدخول غير صحيحة.';button.disabled=false;button.textContent='دخول آمن إلى النظام';}});
+</script>
+</body></html>`;
+}
+
+function enhanceHtml(html, pathname) {
+  let output = String(html)
+    .replaceAll('/logo.svg', '/assets/logo.png?v=3')
+    .replaceAll('font-family:Tahoma,Arial,sans-serif', "font-family:'Cairo',Tahoma,Arial,sans-serif");
+  const headExtras = `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"><link rel="icon" href="/assets/logo.png?v=3" type="image/webp"><style>html,body,button,input,textarea,select{font-family:'Cairo',Tahoma,Arial,sans-serif!important}.brand img,.side-brand img{height:auto!important;object-fit:contain!important}.brand img{width:72px!important}.hero-card img{width:min(260px,85%)!important;height:auto!important;background:#fffaf0;border-radius:18px;padding:8px}.side-brand img{width:58px!important;background:#fffaf0;border-radius:10px;padding:4px}.admin-logout{position:fixed;left:22px;bottom:22px;z-index:1000;border:0;border-radius:12px;padding:10px 17px;background:#b38b4d;color:#fff;font:800 14px 'Cairo',sans-serif;cursor:pointer;box-shadow:0 12px 28px rgba(0,0,0,.2)}</style>`;
+  output = output.includes('</head>') ? output.replace('</head>', `${headExtras}</head>`) : headExtras + output;
+  if (pathname.startsWith('/admin') && output.includes('</body>')) {
+    output = output.replace('</body>', `<form method="post" action="/api/logout"><button class="admin-logout" type="submit">تسجيل الخروج</button></form></body>`);
+  }
+  return output;
+}
+
+const originalCreateServer = http.createServer.bind(http);
+http.createServer = function patchedCreateServer(listener, ...args) {
+  const wrapped = async (req, res) => {
+    const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+    const pathname = url.pathname;
+    const session = getSession(req);
+
+    if (pathname === '/assets/logo.png' || pathname === '/logo.svg') {
+      res.writeHead(200, {
+        'Content-Type': 'image/webp',
+        'Content-Length': logoBuffer.length,
+        'Cache-Control': 'public, max-age=86400, immutable',
+        'X-Content-Type-Options': 'nosniff',
+      });
+      res.end(logoBuffer);
+      return;
+    }
+
+    if (pathname === '/admin/login' && req.method === 'GET') {
+      if (session) return redirect(res, '/admin/');
+      return send(res, 200, loginPage(url.searchParams.get('error') || ''));
+    }
+
+    if (pathname === '/api/login' && req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const type = String(req.headers['content-type'] || '');
+        const data = type.includes('application/json') ? JSON.parse(raw || '{}') : Object.fromEntries(new URLSearchParams(raw));
+        const username = String(data.username || '');
+        const password = String(data.password || '');
+        const usernameOk = safeEqual(username, ADMIN_USERNAME);
+        const passwordOk = safeEqual(password, ADMIN_PASSWORD);
+        if (!usernameOk || !passwordOk) {
+          res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+          res.end(JSON.stringify({ ok: false, message: 'اسم المستخدم أو كلمة المرور غير صحيحة.' }));
+          return;
+        }
+        const token = crypto.randomBytes(32).toString('base64url');
+        sessions.set(token, { username, expiresAt: Date.now() + SESSION_MAX_AGE * 1000 });
+        const secure = String(req.headers['x-forwarded-proto'] || '').includes('https') ? '; Secure' : '';
+        res.writeHead(200, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'Set-Cookie': `${COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${SESSION_MAX_AGE}${secure}`,
+        });
+        res.end(JSON.stringify({ ok: true }));
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ ok: false, message: 'تعذر قراءة بيانات الدخول.' }));
+      }
+      return;
+    }
+
+    if (pathname === '/api/logout' && (req.method === 'POST' || req.method === 'GET')) {
+      const token = parseCookies(req.headers.cookie || '')[COOKIE_NAME];
+      if (token) sessions.delete(token);
+      res.writeHead(302, {
+        Location: '/admin/login',
+        'Cache-Control': 'no-store',
+        'Set-Cookie': `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`,
+      });
+      res.end();
+      return;
+    }
+
+    if ((pathname === '/admin' || pathname.startsWith('/admin/')) && !session) {
+      return redirect(res, '/admin/login');
+    }
+
+    if (session) {
+      req.headers.authorization = `Basic ${Buffer.from(`${ADMIN_USERNAME}:${ADMIN_PASSWORD}`).toString('base64')}`;
+    }
+
+    const originalEnd = res.end.bind(res);
+    res.end = (chunk, encoding, callback) => {
+      if (chunk && (typeof chunk === 'string' || Buffer.isBuffer(chunk))) {
+        const contentType = String(res.getHeader('content-type') || '');
+        const candidate = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk);
+        if (contentType.includes('text/html') || candidate.includes('<!doctype html') || candidate.includes('<html')) {
+          const enhanced = enhanceHtml(candidate, pathname);
+          res.removeHeader('Content-Length');
+          res.setHeader('Cache-Control', 'no-store, max-age=0');
+          return originalEnd(enhanced, encoding, callback);
+        }
+        if (contentType.includes('text/css')) {
+          const enhanced = candidate.replaceAll('font-family:Tahoma,Arial,sans-serif', "font-family:'Cairo',Tahoma,Arial,sans-serif");
+          res.removeHeader('Content-Length');
+          return originalEnd(enhanced, encoding, callback);
+        }
+      }
+      return originalEnd(chunk, encoding, callback);
+    };
+
+    return listener(req, res);
+  };
+  return originalCreateServer(wrapped, ...args);
 };
 
-const css = `
-:root{--navy:#0d2b46;--navy2:#163f61;--gold:#b38b4d;--gold2:#d5b77c;--cream:#f7f3ea;--paper:#fffdf8;--text:#1e2933;--muted:#697783;--line:#e9dfcf;--ok:#2e7352;--shadow:0 20px 50px rgba(13,43,70,.10)}
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font-family:Tahoma,Arial,sans-serif;background:var(--cream);color:var(--text);direction:rtl;line-height:1.8}a{text-decoration:none;color:inherit}button,input,textarea{font:inherit}.wrap{width:min(1180px,calc(100% - 32px));margin:auto}.topline{height:6px;background:linear-gradient(90deg,var(--navy),var(--gold),var(--navy))}.header{position:sticky;top:0;z-index:30;background:rgba(255,253,248,.96);backdrop-filter:blur(14px);border-bottom:1px solid rgba(179,139,77,.18)}.nav{min-height:86px;display:flex;align-items:center;gap:24px}.brand{display:flex;align-items:center;gap:12px;margin-left:auto}.brand img{width:58px;height:58px}.brand strong{display:block;color:var(--navy);font-size:19px}.brand small{color:var(--gold)}.links{display:flex;gap:22px;align-items:center;font-weight:700;font-size:14px}.links a:hover,.links a.active{color:var(--gold)}.actions{display:flex;gap:10px}.btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid transparent;border-radius:12px;padding:11px 19px;font-weight:800;cursor:pointer;transition:.2s}.btn:hover{transform:translateY(-2px)}.btn-primary{background:var(--gold);color:#fff;box-shadow:0 10px 25px rgba(179,139,77,.25)}.btn-outline{border-color:var(--navy);color:var(--navy);background:transparent}.hero{position:relative;overflow:hidden;background:linear-gradient(135deg,#0b243b,#123f62 62%,#1d567e);color:#fff;padding:92px 0 78px}.hero:before,.hero:after{content:"";position:absolute;border:1px solid rgba(213,183,124,.25);border-radius:50%}.hero:before{width:520px;height:520px;left:-170px;top:-250px}.hero:after{width:340px;height:340px;right:-130px;bottom:-190px}.hero-grid{position:relative;display:grid;grid-template-columns:1.2fr .8fr;align-items:center;gap:60px}.eyebrow{display:inline-flex;gap:8px;align-items:center;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:6px 14px;color:var(--gold2);font-weight:800}.hero h1{font-size:clamp(38px,6vw,72px);line-height:1.18;margin:20px 0}.hero h1 span{color:var(--gold2)}.hero p{font-size:19px;color:#dfe9f0;max-width:720px}.hero-card{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:28px;padding:28px;box-shadow:0 35px 70px rgba(0,0,0,.18)}.hero-card img{width:190px;display:block;margin:auto;filter:drop-shadow(0 20px 30px rgba(0,0,0,.2))}.hero-card h3{text-align:center;margin-bottom:5px}.hero-card p{text-align:center;font-size:14px}.stats{margin-top:-32px;position:relative;z-index:4}.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);background:var(--paper);border-radius:22px;box-shadow:var(--shadow);overflow:hidden}.stat{padding:24px;text-align:center;border-left:1px solid var(--line)}.stat:last-child{border-left:0}.stat b{display:block;font-size:28px;color:var(--navy)}.stat span{color:var(--muted);font-size:13px}.section{padding:78px 0}.section.alt{background:#efe8dc}.section-head{text-align:center;max-width:760px;margin:0 auto 38px}.kicker{color:var(--gold);font-weight:900}.section h2,.page-hero h1{color:var(--navy);font-size:clamp(30px,4vw,46px);margin:6px 0}.section-head p{color:var(--muted)}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}.card{background:var(--paper);border:1px solid var(--line);border-radius:20px;padding:24px;box-shadow:0 12px 30px rgba(13,43,70,.06)}.card:hover{transform:translateY(-4px);transition:.2s}.icon{width:56px;height:56px;border-radius:16px;background:#f0e5d2;display:grid;place-items:center;color:var(--navy);font-size:26px}.card h3{color:var(--navy);margin:14px 0 5px}.card p{color:var(--muted);font-size:14px}.progress{height:9px;background:#e9e2d7;border-radius:99px;overflow:hidden;margin:14px 0}.progress i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--gold2));border-radius:inherit}.meta{display:flex;justify-content:space-between;color:var(--muted);font-size:12px}.product-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}.product{background:var(--paper);border:1px solid var(--line);border-radius:18px;overflow:hidden}.product-visual{height:160px;background:linear-gradient(135deg,#0d2b46,#28658e);display:grid;place-items:center;color:var(--gold2);font-size:48px}.product-body{padding:18px}.product h3{margin:0;color:var(--navy)}.price{font-size:22px;color:var(--gold);font-weight:900}.impact{background:var(--navy);color:#fff;border-radius:28px;padding:42px;display:grid;grid-template-columns:1fr auto;gap:30px;align-items:center}.impact h2{color:#fff;margin:0}.impact p{color:#d4e0e8;margin:4px 0}.page-hero{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;padding:62px 0;text-align:center}.page-hero h1{color:#fff}.page-hero p{color:#d5e1e9}.table-wrap{overflow:auto;background:var(--paper);border:1px solid var(--line);border-radius:18px}.table{width:100%;border-collapse:collapse;min-width:700px}.table th,.table td{padding:15px;border-bottom:1px solid var(--line);text-align:right}.table th{background:#f2eadf;color:var(--navy)}.badge{display:inline-block;border-radius:999px;padding:4px 10px;background:#dceee5;color:var(--ok);font-size:12px;font-weight:800}.contact-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px}.field{display:grid;gap:6px;margin-bottom:14px}.field input,.field textarea{width:100%;border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px}.notice{border-right:4px solid var(--gold);background:#fff6e8;padding:14px;border-radius:10px;color:#765c2f}.footer{background:#081d30;color:#d4dee5;padding:48px 0 22px}.footer-grid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:40px}.footer h3{color:#fff}.footer a{display:block;color:#bdcbd5;margin:5px 0}.copy{margin-top:30px;padding-top:18px;border-top:1px solid rgba(255,255,255,.1);color:#8fa2b0;font-size:12px}.admin{background:#eef1f3;min-height:100vh}.admin-shell{display:grid;grid-template-columns:250px 1fr;min-height:100vh}.side{background:#09243a;color:#fff;padding:28px 18px}.side-brand{display:flex;gap:10px;align-items:center;margin-bottom:30px}.side-brand img{width:46px}.side a{display:block;padding:10px 12px;border-radius:10px;color:#cbd8e1;margin:5px 0}.side a.active,.side a:hover{background:rgba(179,139,77,.18);color:#efd6a7}.admin-main{padding:28px}.admin-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}.admin-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}.admin-stat{background:#fff;border-radius:16px;padding:20px;box-shadow:0 8px 25px rgba(13,43,70,.06)}.admin-stat b{display:block;color:var(--navy);font-size:25px}.panel{background:#fff;border-radius:16px;padding:22px;margin-bottom:18px}.success{color:var(--ok);font-weight:800}.empty{padding:30px;text-align:center;color:var(--muted)}
-@media(max-width:900px){.links{display:none}.hero-grid,.contact-grid,.impact{grid-template-columns:1fr}.hero-card{display:none}.stat-grid{grid-template-columns:repeat(2,1fr)}.cards{grid-template-columns:1fr 1fr}.product-grid{grid-template-columns:1fr 1fr}.admin-shell{grid-template-columns:1fr}.side{display:none}.admin-stats{grid-template-columns:1fr 1fr}.footer-grid{grid-template-columns:1fr 1fr}}
-@media(max-width:560px){.nav{min-height:74px}.brand small{display:none}.actions .btn-outline{display:none}.hero{padding:60px 0}.hero h1{font-size:42px}.cards,.product-grid,.admin-stats,.footer-grid{grid-template-columns:1fr}.stat-grid{grid-template-columns:1fr 1fr}.stat{padding:16px}.section{padding:54px 0}.admin-main{padding:16px}}
-`;
-
-const logoSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" role="img" aria-label="وقف الأثر الجميل"><defs><linearGradient id="g" x1="0" x2="1"><stop stop-color="#9b7439"/><stop offset="1" stop-color="#d5b77c"/></linearGradient></defs><circle cx="110" cy="110" r="103" fill="#fffaf0" stroke="#d8c39b" stroke-width="3"/><path d="M42 142C18 96 40 47 84 24M178 142c24-46 2-95-42-118" fill="none" stroke="url(#g)" stroke-width="9" stroke-linecap="round"/><g fill="none" stroke="#b38b4d" stroke-width="5" stroke-linecap="round"><path d="M46 124L29 115M51 108l-19-5M57 91l-18 0M65 74l-16 5M75 58l-14 9M174 124l17-9M169 108l19-5M163 91l18 0M155 74l16 5M145 58l14 9"/></g><path d="M77 91l49-17 21 12-49 18z" fill="#0d2b46"/><path d="M77 91v47l21 12v-46z" fill="#102f4c"/><path d="M98 104l49-18v47l-49 17z" fill="#061a2a"/><path d="M78 101l69-25" stroke="#c9a362" stroke-width="4"/><path d="M127 74V34h9v37M126 34h11l-5-11z" fill="#0d2b46"/><path d="M69 170c18-27 31-32 41-15 10-17 23-12 41 15-15-4-28-2-41 12-13-14-26-16-41-12z" fill="url(#g)"/><circle cx="110" cy="159" r="8" fill="#fff4d8"/></svg>`;
-
-function escapeHtml(value='') { return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
-function money(n){ return new Intl.NumberFormat('ar-SA').format(n) + ' ر.س'; }
-function progress(p){ return Math.min(100, Math.round((p.collected / p.target) * 100)); }
-function nav(active=''){ return `<div class="topline"></div><header class="header"><div class="wrap nav"><a class="brand" href="/"><img src="/logo.svg" alt="شعار وقف الأثر الجميل"><div><strong>وقف الأثر الجميل</strong><small>مكة المكرمة</small></div></a><nav class="links"><a class="${active==='home'?'active':''}" href="/">الرئيسية</a><a class="${active==='projects'?'active':''}" href="/projects">المشاريع</a><a class="${active==='store'?'active':''}" href="/store">المتجر</a><a class="${active==='about'?'active':''}" href="/about">عن الوقف</a><a class="${active==='reports'?'active':''}" href="/reports">الشفافية</a><a class="${active==='contact'?'active':''}" href="/contact">تواصل معنا</a></nav><div class="actions"><a class="btn btn-outline" href="/store">تسوّق</a><a class="btn btn-primary" href="/projects">ساهم الآن</a></div></div></header>`; }
-function footer(){ return `<footer class="footer"><div class="wrap"><div class="footer-grid"><div><h3>وقف الأثر الجميل</h3><p>من مكة المكرمة نصنع أثرًا جميلًا يمتد، عبر مشاريع مستدامة ومتجر يعود ريعه للأثر.</p></div><div><h3>روابط</h3><a href="/projects">مشاريع الوقف</a><a href="/store">متجر الأثر</a><a href="/reports">التقارير</a></div><div><h3>التواصل</h3><a href="/contact">نموذج التواصل</a><a href="/admin/">النظام الإداري</a></div></div><div class="copy">نسخة تشغيلية تجريبية — لا تستقبل مدفوعات حقيقية حتى استكمال الربط النظامي والمالي.</div></div></footer>`; }
-function layout(title,body,active=''){ return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0d2b46"><title>${escapeHtml(title)} | وقف الأثر الجميل</title><style>${css}</style></head><body>${nav(active)}${body}${footer()}</body></html>`; }
-
-function projectCards(){ return projects.map(p=>`<article class="card"><div class="icon">${p.icon}</div><h3>${p.title}</h3><p>${p.description}</p><div class="progress"><i style="width:${progress(p)}%"></i></div><div class="meta"><span>${money(p.collected)}</span><span>${progress(p)}% من ${money(p.target)}</span></div><p><a class="btn btn-outline" href="/contact?subject=${encodeURIComponent('المساهمة في '+p.title)}">ساهم في المشروع</a></p></article>`).join(''); }
-function productCards(){ return products.map((p,i)=>`<article class="product"><div class="product-visual">${['✦','⌂','◆','▣'][i]}</div><div class="product-body"><small>${p.category}</small><h3>${p.name}</h3><p>${p.description}</p><div class="price">${money(p.price)}</div><button class="btn btn-primary" onclick="alert('هذه نسخة تجريبية. سيتم تفعيل الدفع بعد ربط بوابة الدفع.')">أضف للسلة</button></div></article>`).join(''); }
-
-function home(){ const total=projects.reduce((s,p)=>s+p.collected,0); return layout('الرئيسية',`<main><section class="hero"><div class="wrap hero-grid"><div><span class="eyebrow">من مكة المكرمة إلى أثرٍ لا ينقطع</span><h1>أثرٌ جميل <span>يبدأ منك</span><br>وخيرٌ يبقى بعدك</h1><p>منصة موحدة لمشاريع الوقف، متجر الأثر، والتقارير الشفافة؛ لتكون كل مساهمة وخطوة شراء جزءًا من خير مستدام.</p><div class="actions"><a class="btn btn-primary" href="/projects">استكشف المشاريع</a><a class="btn btn-outline" style="border-color:#fff;color:#fff" href="/store">تسوّق لدعم الأثر</a></div></div><div class="hero-card"><img src="/logo.svg" alt="وقف الأثر الجميل"><h3>وقف الأثر الجميل</h3><p>أثر يبقى… وخير ينمو</p></div></div></section><section class="stats"><div class="wrap stat-grid"><div class="stat"><b>${money(total)}</b><span>إجمالي ما جُمع للمشاريع</span></div><div class="stat"><b>${state.beneficiaries.toLocaleString('ar-SA')}</b><span>مستفيدًا</span></div><div class="stat"><b>${state.completedProjects}</b><span>مشروعًا مكتملًا</span></div><div class="stat"><b>${state.partners}</b><span>شريك أثر</span></div></div></section><section class="section"><div class="wrap"><div class="section-head"><span class="kicker">مشاريع مختارة</span><h2>ساهم في أثر موثق وواضح</h2><p>تظهر نسب الإنجاز والأهداف المالية بصورة مباشرة، مع تقارير مرحلية ونهائية.</p></div><div class="cards">${projectCards()}</div></div></section><section class="section alt"><div class="wrap"><div class="section-head"><span class="kicker">متجر الأثر</span><h2>تسوّق… واجعل مشترياتك أثرًا مستمرًا</h2></div><div class="product-grid">${productCards()}</div></div></section><section class="section"><div class="wrap impact"><div><h2>الشفافية جزء من الأثر</h2><p>يمكن متابعة تقدم المشاريع ومؤشرات الصرف والنتائج من مكان واحد.</p></div><a class="btn btn-primary" href="/reports">عرض التقارير</a></div></section></main>`,'home'); }
-function projectsPage(){ return layout('مشاريع الوقف',`<main><section class="page-hero"><div class="wrap"><h1>مشاريع وقف الأثر الجميل</h1><p>مشاريع ذات أهداف مالية واضحة ومؤشرات تقدم قابلة للمتابعة.</p></div></section><section class="section"><div class="wrap"><div class="cards">${projectCards()}</div><div class="notice" style="margin-top:28px">المساهمات في هذه النسخة تجريبية، ولن يتم تحصيل أي مبلغ قبل تفعيل بوابة دفع مرخصة واعتماد الأنشطة رسميًا.</div></div></section></main>`,'projects'); }
-function storePage(){ return layout('المتجر',`<main><section class="page-hero"><div class="wrap"><h1>متجر الأثر الجميل</h1><p>منتجات مختارة، ويُوضح مسار الريع بعد اعتماد الآلية المالية النهائية.</p></div></section><section class="section"><div class="wrap"><div class="product-grid">${productCards()}</div></div></section></main>`,'store'); }
-function aboutPage(){ return layout('عن الوقف',`<main><section class="page-hero"><div class="wrap"><h1>عن وقف الأثر الجميل</h1><p>رؤية وقفية حديثة تنطلق من مكة المكرمة.</p></div></section><section class="section"><div class="wrap cards"><article class="card"><div class="icon">◎</div><h3>رؤيتنا</h3><p>أن يكون الوقف نموذجًا موثوقًا في صناعة أثر اجتماعي مستدام وقابل للقياس.</p></article><article class="card"><div class="icon">◇</div><h3>رسالتنا</h3><p>إدارة مشاريع نوعية وربط المجتمع بفرص عطاء واضحة وشفافة.</p></article><article class="card"><div class="icon">✓</div><h3>قيمنا</h3><p>الأمانة، الشفافية، الاستدامة، الكفاءة، وحفظ كرامة المستفيد.</p></article></div></section></main>`,'about'); }
-function reportsPage(){ return layout('التقارير والشفافية',`<main><section class="page-hero"><div class="wrap"><h1>التقارير والشفافية</h1><p>مؤشرات أولية تجريبية تُربط لاحقًا بالنظام المالي والمشاريع.</p></div></section><section class="section"><div class="wrap"><div class="table-wrap"><table class="table"><thead><tr><th>المشروع</th><th>المستهدف</th><th>المتحقق</th><th>نسبة الإنجاز</th><th>الحالة</th></tr></thead><tbody>${projects.map(p=>`<tr><td>${p.title}</td><td>${money(p.target)}</td><td>${money(p.collected)}</td><td>${progress(p)}%</td><td><span class="badge">نشط</span></td></tr>`).join('')}</tbody></table></div></div></section></main>`,'reports'); }
-function contactPage(url){ const subject=escapeHtml(url.searchParams.get('subject')||''); return layout('تواصل معنا',`<main><section class="page-hero"><div class="wrap"><h1>تواصل معنا</h1><p>نسعد باستفسارات المساهمين والعملاء والشركاء.</p></div></section><section class="section"><div class="wrap contact-grid"><div class="card"><h3>بيانات التواصل</h3><p>مكة المكرمة — المملكة العربية السعودية</p><p>يتم إضافة الهاتف والبريد الرسميين بعد اعتماد بيانات الوقف.</p><div class="notice">لا ترسل بيانات بنكية أو وثائق شخصية عبر النموذج التجريبي.</div></div><form class="card" method="post" action="/contact"><div class="field"><label>الاسم</label><input name="name" required></div><div class="field"><label>رقم الجوال</label><input name="phone"></div><div class="field"><label>الموضوع</label><input name="subject" value="${subject}"></div><div class="field"><label>الرسالة</label><textarea name="message" rows="5" required></textarea></div><button class="btn btn-primary">إرسال الرسالة</button></form></div></section></main>`,'contact'); }
-function contactThanks(){ return layout('تم استلام الرسالة',`<main><section class="section"><div class="wrap"><div class="card" style="max-width:680px;margin:auto;text-align:center"><div class="icon" style="margin:auto">✓</div><h2>تم استلام رسالتك التجريبية</h2><p>سيتم ربط هذا النموذج بقاعدة البيانات والإشعارات في النسخة الإنتاجية.</p><a class="btn btn-primary" href="/">العودة للرئيسية</a></div></div></section></main>`); }
-function adminPage(){ const total=projects.reduce((s,p)=>s+p.collected,0); return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>النظام الإداري | وقف الأثر الجميل</title><style>${css}</style></head><body class="admin"><div class="admin-shell"><aside class="side"><div class="side-brand"><img src="/logo.svg"><div><b>وقف الأثر الجميل</b><small style="display:block;color:#d5b77c">النظام الإداري</small></div></div><a class="active" href="/admin/">لوحة المعلومات</a><a href="#projects">المشاريع</a><a href="#store">المتجر والمخزون</a><a href="#finance">المالية</a><a href="#reports">التقارير</a><a href="/">عرض الموقع</a></aside><main class="admin-main"><div class="admin-top"><div><h1 style="margin:0;color:#0d2b46">لوحة المعلومات</h1><span>نظرة عامة على الوقف والمتجر</span></div><span class="badge">نسخة تجريبية</span></div><section class="admin-stats"><div class="admin-stat"><span>المساهمات</span><b>${money(total)}</b></div><div class="admin-stat"><span>مشاريع نشطة</span><b>${projects.length}</b></div><div class="admin-stat"><span>طلبات المتجر</span><b>${state.orders}</b></div><div class="admin-stat"><span>إيراد المتجر</span><b>${money(state.storeRevenue)}</b></div></section><section class="panel" id="projects"><h2>تقدم المشاريع</h2>${projects.map(p=>`<div style="margin:18px 0"><div class="meta"><b>${p.title}</b><span>${progress(p)}%</span></div><div class="progress"><i style="width:${progress(p)}%"></i></div></div>`).join('')}</section><section class="panel" id="store"><h2>المخزون</h2><div class="table-wrap"><table class="table"><thead><tr><th>المنتج</th><th>التصنيف</th><th>السعر</th><th>المخزون</th></tr></thead><tbody>${products.map(p=>`<tr><td>${p.name}</td><td>${p.category}</td><td>${money(p.price)}</td><td>${p.stock}</td></tr>`).join('')}</tbody></table></div></section><section class="panel" id="finance"><h2>الحالة المالية</h2><p class="notice">هذه المؤشرات بيانات عرض فقط. لم يتم ربط حساب بنكي أو بوابة دفع أو نظام محاسبي.</p></section></main></div></body></html>`; }
-
-function authorized(req){ if(!ADMIN_PASSWORD) return false; const h=req.headers.authorization||''; if(!h.startsWith('Basic ')) return false; try{ const d=Buffer.from(h.slice(6),'base64').toString(); const i=d.indexOf(':'); if(i<0)return false; const u=d.slice(0,i),p=d.slice(i+1); const a=Buffer.from(u),b=Buffer.from(ADMIN_USERNAME),c=Buffer.from(p),e=Buffer.from(ADMIN_PASSWORD); return a.length===b.length&&c.length===e.length&&crypto.timingSafeEqual(a,b)&&crypto.timingSafeEqual(c,e);}catch{return false;} }
-function send(res,status,body,type='text/html; charset=utf-8',extra={}){ const data=Buffer.from(body); res.writeHead(status,{'Content-Type':type,'Content-Length':data.length,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Frame-Options':'SAMEORIGIN','Referrer-Policy':'strict-origin-when-cross-origin',...extra}); res.end(data); }
-function notFound(){ return layout('غير موجود',`<main><section class="section"><div class="wrap"><div class="card" style="text-align:center"><h1>الصفحة غير موجودة</h1><p>تحقق من الرابط أو عد إلى الصفحة الرئيسية.</p><a class="btn btn-primary" href="/">الرئيسية</a></div></div></section></main>`); }
-
-const server=http.createServer(async(req,res)=>{ const url=new URL(req.url||'/',`http://${req.headers.host||'localhost'}`); if(req.method==='GET'&&url.pathname==='/logo.svg')return send(res,200,logoSvg,'image/svg+xml; charset=utf-8',{'Cache-Control':'public, max-age=3600'}); if(req.method==='GET'&&url.pathname==='/api/health')return send(res,200,JSON.stringify({ok:true,service:'waqf-alathar-aljameel',time:new Date().toISOString()}),'application/json; charset=utf-8'); if(url.pathname==='/admin'||url.pathname==='/admin/'){ if(!authorized(req))return send(res,401,'Authentication required','text/plain; charset=utf-8',{'WWW-Authenticate':'Basic realm="Waqf Admin", charset="UTF-8"'}); return send(res,200,adminPage()); } if(req.method==='POST'&&url.pathname==='/contact'){ let size=0; for await(const chunk of req){size+=chunk.length;if(size>100000)break;} return send(res,200,contactThanks()); } if(req.method!=='GET')return send(res,405,'Method not allowed','text/plain; charset=utf-8'); const routes={'/':home,'/projects':projectsPage,'/store':storePage,'/about':aboutPage,'/reports':reportsPage}; if(routes[url.pathname])return send(res,200,routes[url.pathname]()); if(url.pathname==='/contact')return send(res,200,contactPage(url)); return send(res,404,notFound()); });
-server.listen(PORT,HOST,()=>console.log(`Waqf Alathar Aljameel listening on ${HOST}:${PORT}`));
+await import('./legacy-server.mjs');
