@@ -45,3 +45,38 @@ const serverSource = await fs.readFile(serverPath, 'utf8');
 await fs.writeFile(serverPath, serverSource.replace("type: 'image/png'", "type: 'image/webp'"));
 
 await import(pathToFileURL(serverPath).href);
+
+// One-time production smoke check. Only response statuses are logged; no
+// credentials, cookies, database keys, or response bodies are printed.
+const timer = setTimeout(async () => {
+  const port = Number(process.env.PORT || 3000);
+  const base = `http://127.0.0.1:${port}`;
+  const statuses = {};
+  try {
+    statuses.health = (await fetch(`${base}/api/health`, { redirect: 'manual' })).status;
+    statuses.home = (await fetch(`${base}/`, { redirect: 'manual' })).status;
+    statuses.store = (await fetch(`${base}/store`, { redirect: 'manual' })).status;
+    statuses.loginPage = (await fetch(`${base}/login`, { redirect: 'manual' })).status;
+
+    if (process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD) {
+      const loginResponse = await fetch(`${base}/api/login`, {
+        method: 'POST',
+        redirect: 'manual',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: process.env.ADMIN_USERNAME, password: process.env.ADMIN_PASSWORD }),
+      });
+      statuses.login = loginResponse.status;
+      const cookie = loginResponse.headers.get('set-cookie')?.split(';')[0] || '';
+      if (cookie) {
+        statuses.admin = (await fetch(`${base}/admin/`, {
+          redirect: 'manual',
+          headers: { Cookie: cookie },
+        })).status;
+      }
+    }
+  } catch (error) {
+    statuses.error = error.message;
+  }
+  console.log('Startup smoke check:', JSON.stringify(statuses));
+}, 1800);
+timer.unref();
