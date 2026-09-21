@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { inspectVisualRuntime } from './inspect-visual.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const payloadDir = path.join(__dirname, 'payload-v4b');
@@ -47,9 +48,6 @@ const serverPath = path.join(runtimeDir, 'server.mjs');
 const serverSource = await fs.readFile(serverPath, 'utf8');
 await fs.writeFile(serverPath, serverSource.replace("type: 'image/png'", "type: 'image/webp'"));
 
-// Apply a narrow runtime hotfix to the public-page lookup. Fetching the
-// page list first makes the renderer independent of PostgREST filter parsing
-// while keeping the same RLS and server-key protection used by the builder.
 const visualPatchPath = path.join(runtimeDir, 'visual-builder-patch.mjs');
 let visualPatchSource = await fs.readFile(visualPatchPath, 'utf8');
 const oldPublicLoader = "const pages=await sb(`waqf_pages?select=*&slug=eq.${encodeFilter(slug)}&published=eq.true&limit=1`);const page=pages?.[0];";
@@ -61,8 +59,8 @@ if (visualPatchSource.includes(oldPublicLoader)) {
   throw new Error('Visual public-page loader hotfix target was not found.');
 }
 
-// Import the visual builder first so it can serve its routes and observe the
-// final HTML produced by the existing CMS and application wrappers.
+await inspectVisualRuntime(runtimeDir);
+
 await import(pathToFileURL(visualPatchPath).href);
 await import(pathToFileURL(path.join(runtimeDir, 'cms-patch.mjs')).href);
 await import(pathToFileURL(serverPath).href);
