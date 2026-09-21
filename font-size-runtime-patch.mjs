@@ -2,11 +2,26 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
 const FONT_MARKER = 'WAQF_VISUAL_FONT_CONTROLS_V1';
+const SELECTOR_FIX_MARKER = 'WAQF_SELECTOR_FOREACH_FIX_V1';
 
 function requireReplace(source, searchValue, replacement, label) {
   if (source.includes(replacement)) return source;
   if (!source.includes(searchValue)) throw new Error(`Font-size patch target not found: ${label}`);
   return source.replace(searchValue, replacement);
+}
+
+function fixCollectionSelectors(source) {
+  // The visual editor's `$` helper returns one element, while `$$` returns an
+  // array. A legacy layout-control binding called forEach on `$`, causing:
+  // "$(...).forEach is not a function" whenever the section inspector opened.
+  const badLayoutBinding = /(?<!\$)\$\('\[data-layout\]',root\)\.forEach/g;
+  const fixed = source.replace(
+    badLayoutBinding,
+    () => "$$('[data-layout]',root).forEach"
+  );
+  return fixed.includes(SELECTOR_FIX_MARKER)
+    ? fixed
+    : `/* ${SELECTOR_FIX_MARKER} */\n${fixed}`;
 }
 
 export async function applyFontSizeRuntimePatch(runtimeDir) {
@@ -18,7 +33,7 @@ export async function applyFontSizeRuntimePatch(runtimeDir) {
 
   let publicJs = await fs.readFile(publicJsPath, 'utf8');
   let publicCss = await fs.readFile(publicCssPath, 'utf8');
-  let builderJs = await fs.readFile(builderJsPath, 'utf8');
+  let builderJs = fixCollectionSelectors(await fs.readFile(builderJsPath, 'utf8'));
   let builderCss = await fs.readFile(builderCssPath, 'utf8');
   let builderPatch = await fs.readFile(builderPatchPath, 'utf8');
 
@@ -80,8 +95,14 @@ export async function applyFontSizeRuntimePatch(runtimeDir) {
     const inspectorBindMarker = "$$('[data-layout]',root).forEach(b=>b.addEventListener('click',()=>{pushHistory(snapshot());s.design=s.design||{};s.design.layout=b.dataset.layout;markSection(s,true);renderInspector();renderSections()}));";
     const resetHandler = inspectorBindMarker + "const resetFonts=$('[data-reset-font-sizes]',root);if(resetFonts)resetFonts.addEventListener('click',()=>{pushHistory(snapshot());s.design=s.design||{};['title_size','subtitle_size','body_size','eyebrow_size','button_size','card_title_size','card_text_size','stat_size'].forEach(key=>delete s.design[key]);markSection(s,true);renderInspector();renderSections()});";
     builderJs = requireReplace(builderJs, inspectorBindMarker, resetHandler, 'font reset handler');
-    await fs.writeFile(builderJsPath, builderJs);
   }
+
+  // Re-run after all insertions, then verify that the known invalid binding is gone.
+  builderJs = fixCollectionSelectors(builderJs);
+  if (/(?<!\$)\$\('\[data-layout\]',root\)\.forEach/.test(builderJs)) {
+    throw new Error('Visual editor collection selector fix was not applied.');
+  }
+  await fs.writeFile(builderJsPath, builderJs);
 
   if (!builderCss.includes(FONT_MARKER)) {
     builderCss += `\n\n/* ${FONT_MARKER} */
