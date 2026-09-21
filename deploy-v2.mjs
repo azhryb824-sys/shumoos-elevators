@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { applyFontSizeRuntimePatch } from './font-size-runtime-patch.mjs';
 import { applyMediaReferenceRuntimePatch } from './media-reference-runtime-patch.mjs';
 import { applyHeaderRuntimePatch } from './header-runtime-loader.mjs';
+import { applyLogoRuntimePatch } from './logo-runtime-patch.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const payloadDir = path.join(__dirname, 'payload-v4b');
@@ -64,6 +65,7 @@ if (visualPatchSource.includes(oldPublicLoader)) {
 await applyFontSizeRuntimePatch(runtimeDir);
 await applyMediaReferenceRuntimePatch(runtimeDir);
 await applyHeaderRuntimePatch(runtimeDir);
+await applyLogoRuntimePatch(runtimeDir);
 await import(pathToFileURL(visualPatchPath).href);
 await import(pathToFileURL(path.join(__dirname, 'visual-public-shell-patch.mjs')).href);
 await import(pathToFileURL(path.join(runtimeDir, 'cms-patch.mjs')).href);
@@ -93,7 +95,7 @@ const timer = setTimeout(async () => {
     statuses.cmsAsset = cmsAssetResponse.status;
     statuses.cmsMediaGuard = cmsAssetSource.includes('WAQF_PAGE_MEDIA_REFERENCE_GUARD_V1') ? 200 : 500;
 
-    const visualAssetResponse = await fetch(`${base}/visual-builder.js?v=10`, { redirect: 'manual' });
+    const visualAssetResponse = await fetch(`${base}/visual-builder.js?v=11`, { redirect: 'manual' });
     const visualAssetSource = await visualAssetResponse.text();
     statuses.visualAsset = visualAssetResponse.status;
     statuses.fontControls = visualAssetSource.includes('design.title_size') && visualAssetSource.includes('data-reset-font-sizes') ? 200 : 500;
@@ -101,6 +103,7 @@ const timer = setTimeout(async () => {
     statuses.visualMediaGuard = visualAssetSource.includes('WAQF_PAGE_MEDIA_REFERENCE_GUARD_V1') ? 200 : 500;
     statuses.sectionTypes = visualAssetSource.includes('WAQF_VISUAL_SECTION_TYPES_V1') && visualAssetSource.includes("partners:['الشركاء'") && visualAssetSource.includes("steps:['خطوات العمل'") ? 200 : 500;
     statuses.headerControls = visualAssetSource.includes('WAQF_VISUAL_HEADER_EDITOR_V1') && visualAssetSource.includes('renderHeaderPanel') && visualAssetSource.includes('data-header-field') ? 200 : 500;
+    statuses.logoControls = visualAssetSource.includes('WAQF_VISUAL_LOGO_EDITOR_V1') && visualAssetSource.includes('vbSiteLogoSelect') && visualAssetSource.includes('saveSiteLogo') ? 200 : 500;
 
     const publicRendererResponse = await fetch(`${base}/visual-public.js?v=10`, { redirect: 'manual' });
     const publicRendererSource = await publicRendererResponse.text();
@@ -133,7 +136,7 @@ const timer = setTimeout(async () => {
         const designerStatusResponse = await fetch(`${base}/admin/designer`, { redirect: 'manual', headers: { Cookie: cookie } });
         const designerStatusHtml = await designerStatusResponse.text();
         statuses.designer = designerStatusResponse.status;
-        statuses.designerAssets = designerStatusHtml.includes('/visual-builder.js?v=10') && designerStatusHtml.includes('/visual-public.css?v=10') ? 200 : 500;
+        statuses.designerAssets = designerStatusHtml.includes('/visual-builder.js?v=11') && designerStatusHtml.includes('/visual-public.css?v=10') ? 200 : 500;
         statuses.designerHeaderTab = designerStatusHtml.includes('data-tab="header"') && designerStatusHtml.includes('id="vbHeaderPanel"') ? 200 : 500;
 
         const cmsTokenMatch = adminHtml.match(/window\.WAQF_CMS_TOKEN=("(?:\\.|[^"\\])*")/);
@@ -156,6 +159,7 @@ const timer = setTimeout(async () => {
           const visualBootstrapData = await visualBootstrapResponse.json().catch(() => ({}));
           statuses.visualBootstrap = visualBootstrapResponse.status;
           statuses.headerBootstrap = visualBootstrapData?.settings?.header && Array.isArray(visualBootstrapData?.menus) ? 200 : 500;
+          statuses.logoBootstrap = Array.isArray(visualBootstrapData?.media) && !!visualBootstrapData?.settings?.site ? 200 : 500;
           if (visualBootstrapData?.settings?.header) {
             statuses.headerSave = (await fetch(`${base}/api/visual/settings/header`, {
               method: 'PUT',
