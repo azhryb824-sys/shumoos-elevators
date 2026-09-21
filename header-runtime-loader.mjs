@@ -9,6 +9,7 @@ async function loadFixedModule() {
   if (loadedModule) return loadedModule;
   const sourcePath = path.join(__dirname, 'header-runtime-patch.mjs');
   let source = await fs.readFile(sourcePath, 'utf8');
+
   source = source
     .replace(
       "const rows=await sb(`waqf_menu_items?id=eq.${headerMenuMatch[1]}`,{method:'PATCH',body})",
@@ -17,10 +18,19 @@ async function loadFixedModule() {
     .replace(
       "await sb(`waqf_menu_items?id=eq.${headerMenuMatch[1]}`,{method:'DELETE',prefer:'return=minimal'})",
       "await sb('waqf_menu_items?id=eq.'+headerMenuMatch[1],{method:'DELETE',prefer:'return=minimal'})"
+    )
+    .replace(
+      "let headerMenuMatch=pathname.match(/^\\\\/api\\\\/visual\\\\/menus\\\\/(\\\\d+)$/);",
+      "const headerMenuPath='/api/visual/menus/';const headerMenuIdText=pathname.startsWith(headerMenuPath)?pathname.slice(headerMenuPath.length):'';let headerMenuMatch=headerMenuIdText&&Number.isSafeInteger(Number(headerMenuIdText))?['',headerMenuIdText]:null;"
     );
+
+  if (source.includes('pathname.match(/^\\\\/api\\\\/visual\\\\/menus')) {
+    throw new Error('Header menu route repair was not applied.');
+  }
+
   const fixedPath = path.join('/tmp', 'waqf-header-runtime-patch-fixed.mjs');
   await fs.writeFile(fixedPath, source);
-  loadedModule = await import(`${pathToFileURL(fixedPath).href}?v=2`);
+  loadedModule = await import(`${pathToFileURL(fixedPath).href}?v=3`);
   return loadedModule;
 }
 
