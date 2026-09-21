@@ -14,11 +14,13 @@ export async function applyFontSizeRuntimePatch(runtimeDir) {
   const publicCssPath = path.join(runtimeDir, 'visual-public.css');
   const builderJsPath = path.join(runtimeDir, 'visual-builder.js');
   const builderCssPath = path.join(runtimeDir, 'visual-builder.css');
+  const builderPatchPath = path.join(runtimeDir, 'visual-builder-patch.mjs');
 
   let publicJs = await fs.readFile(publicJsPath, 'utf8');
   let publicCss = await fs.readFile(publicCssPath, 'utf8');
   let builderJs = await fs.readFile(builderJsPath, 'utf8');
   let builderCss = await fs.readFile(builderCssPath, 'utf8');
+  let builderPatch = await fs.readFile(builderPatchPath, 'utf8');
 
   if (!publicJs.includes(FONT_MARKER)) {
     const sectionClassOld = "const sectionClass=s=>`wb-section wb-${esc(s.section_type)} wb-layout-${esc(s.design?.layout||'default')}`;";
@@ -92,5 +94,10 @@ export async function applyFontSizeRuntimePatch(runtimeDir) {
 @media(max-width:680px){.vb-font-size-toolbar{flex-direction:column}.vb-font-size-toolbar [data-reset-font-sizes]{width:100%}}
 `;
     await fs.writeFile(builderCssPath, builderCss);
+  }
+
+  if (!builderPatch.includes('?v=8')) {
+    builderPatch = builderPatch.replaceAll('?v=6', '?v=8').replaceAll('?v=7', '?v=8');
+    await fs.writeFile(builderPatchPath, builderPatch);
   }
 }
