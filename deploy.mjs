@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { applyFontSizeRuntimePatch } from './font-size-runtime-patch.mjs';
 import { applyMediaReferenceRuntimePatch } from './media-reference-runtime-patch.mjs';
+import { applyHeaderRuntimePatch } from './header-runtime-patch.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const payloadDir = path.join(__dirname, 'payload-v4b');
@@ -62,6 +63,7 @@ if (visualPatchSource.includes(oldPublicLoader)) {
 
 await applyFontSizeRuntimePatch(runtimeDir);
 await applyMediaReferenceRuntimePatch(runtimeDir);
+await applyHeaderRuntimePatch(runtimeDir);
 await import(pathToFileURL(visualPatchPath).href);
 await import(pathToFileURL(path.join(__dirname, 'visual-public-shell-patch.mjs')).href);
 await import(pathToFileURL(path.join(runtimeDir, 'cms-patch.mjs')).href);
@@ -77,8 +79,13 @@ const timer = setTimeout(async () => {
     const homeHtml = await homeResponse.text();
     statuses.home = homeResponse.status;
     statuses.publicVisualShell = homeHtml.includes('data-waqf-visual-shell="1"') ? 200 : 500;
-    statuses.publicVisualAsset = homeHtml.includes('/visual-public.js?v=9') ? 200 : 500;
-    statuses.store = (await fetch(`${base}/store`, { redirect: 'manual' })).status;
+    statuses.publicVisualAsset = homeHtml.includes('/visual-public.js?v=10') ? 200 : 500;
+    statuses.publicHeader = homeHtml.includes('data-waqf-editable-header="1"') ? 200 : 500;
+
+    const storeResponse = await fetch(`${base}/store`, { redirect: 'manual' });
+    const storeHtml = await storeResponse.text();
+    statuses.store = storeResponse.status;
+    statuses.storeHeader = storeHtml.includes('data-waqf-editable-header="1"') ? 200 : 500;
     statuses.loginPage = (await fetch(`${base}/login`, { redirect: 'manual' })).status;
 
     const cmsAssetResponse = await fetch(`${base}/cms-admin.js`, { redirect: 'manual' });
@@ -86,25 +93,27 @@ const timer = setTimeout(async () => {
     statuses.cmsAsset = cmsAssetResponse.status;
     statuses.cmsMediaGuard = cmsAssetSource.includes('WAQF_PAGE_MEDIA_REFERENCE_GUARD_V1') ? 200 : 500;
 
-    const visualAssetResponse = await fetch(`${base}/visual-builder.js?v=9`, { redirect: 'manual' });
+    const visualAssetResponse = await fetch(`${base}/visual-builder.js?v=10`, { redirect: 'manual' });
     const visualAssetSource = await visualAssetResponse.text();
     statuses.visualAsset = visualAssetResponse.status;
     statuses.fontControls = visualAssetSource.includes('design.title_size') && visualAssetSource.includes('data-reset-font-sizes') ? 200 : 500;
     statuses.collectionSelectors = /(?<!\$)\$\('\[data-layout\]',root\)\.forEach/.test(visualAssetSource) ? 500 : 200;
     statuses.visualMediaGuard = visualAssetSource.includes('WAQF_PAGE_MEDIA_REFERENCE_GUARD_V1') ? 200 : 500;
     statuses.sectionTypes = visualAssetSource.includes('WAQF_VISUAL_SECTION_TYPES_V1') && visualAssetSource.includes("partners:['الشركاء'") && visualAssetSource.includes("steps:['خطوات العمل'") ? 200 : 500;
+    statuses.headerControls = visualAssetSource.includes('WAQF_VISUAL_HEADER_EDITOR_V1') && visualAssetSource.includes('renderHeaderPanel') && visualAssetSource.includes('data-header-field') ? 200 : 500;
 
-    const publicRendererResponse = await fetch(`${base}/visual-public.js?v=9`, { redirect: 'manual' });
+    const publicRendererResponse = await fetch(`${base}/visual-public.js?v=10`, { redirect: 'manual' });
     const publicRendererSource = await publicRendererResponse.text();
     statuses.publicRenderer = publicRendererResponse.status;
     statuses.fontRenderer = publicRendererSource.includes('wb-font-title') && publicRendererSource.includes('--section-title-size') ? 200 : 500;
     statuses.sectionRenderer = publicRendererSource.includes('renderPartners') && publicRendererSource.includes('renderSteps') && publicRendererSource.includes('renderTestimonials') ? 200 : 500;
 
-    const publicCssResponse = await fetch(`${base}/visual-public.css?v=9`, { redirect: 'manual' });
+    const publicCssResponse = await fetch(`${base}/visual-public.css?v=10`, { redirect: 'manual' });
     const publicCssSource = await publicCssResponse.text();
     statuses.publicCss = publicCssResponse.status;
     statuses.fontCss = publicCssSource.includes('WAQF_VISUAL_FONT_CONTROLS_V1') ? 200 : 500;
     statuses.sectionCss = publicCssSource.includes('WAQF_VISUAL_SECTION_TYPES_V1') && publicCssSource.includes('.wb-partners-grid') ? 200 : 500;
+    statuses.headerCss = publicCssSource.includes('WAQF_VISUAL_HEADER_EDITOR_V1') && publicCssSource.includes('.waqf-custom-header') ? 200 : 500;
 
     if (process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD) {
       const loginResponse = await fetch(`${base}/api/login`, {
@@ -124,7 +133,8 @@ const timer = setTimeout(async () => {
         const designerStatusResponse = await fetch(`${base}/admin/designer`, { redirect: 'manual', headers: { Cookie: cookie } });
         const designerStatusHtml = await designerStatusResponse.text();
         statuses.designer = designerStatusResponse.status;
-        statuses.designerAssets = designerStatusHtml.includes('/visual-builder.js?v=9') && designerStatusHtml.includes('/visual-public.css?v=9') ? 200 : 500;
+        statuses.designerAssets = designerStatusHtml.includes('/visual-builder.js?v=10') && designerStatusHtml.includes('/visual-public.css?v=10') ? 200 : 500;
+        statuses.designerHeaderTab = designerStatusHtml.includes('data-tab="header"') && designerStatusHtml.includes('id="vbHeaderPanel"') ? 200 : 500;
 
         const cmsTokenMatch = adminHtml.match(/window\.WAQF_CMS_TOKEN=("(?:\\.|[^"\\])*")/);
         if (cmsTokenMatch) {
@@ -138,10 +148,22 @@ const timer = setTimeout(async () => {
         const visualTokenMatch = designerStatusHtml.match(/window\.WAQF_VISUAL_TOKEN=("(?:\\.|[^"\\])*")/);
         if (visualTokenMatch) {
           const visualToken = JSON.parse(visualTokenMatch[1]);
-          statuses.visualBootstrap = (await fetch(`${base}/api/visual/bootstrap`, {
+          const visualHeaders = { Cookie: cookie, 'x-waqf-visual-token': visualToken };
+          const visualBootstrapResponse = await fetch(`${base}/api/visual/bootstrap`, {
             redirect: 'manual',
-            headers: { Cookie: cookie, 'x-waqf-visual-token': visualToken },
-          })).status;
+            headers: visualHeaders,
+          });
+          const visualBootstrapData = await visualBootstrapResponse.json().catch(() => ({}));
+          statuses.visualBootstrap = visualBootstrapResponse.status;
+          statuses.headerBootstrap = visualBootstrapData?.settings?.header && Array.isArray(visualBootstrapData?.menus) ? 200 : 500;
+          if (visualBootstrapData?.settings?.header) {
+            statuses.headerSave = (await fetch(`${base}/api/visual/settings/header`, {
+              method: 'PUT',
+              redirect: 'manual',
+              headers: { ...visualHeaders, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ value: visualBootstrapData.settings.header }),
+            })).status;
+          }
           statuses.visualPublicPage = (await fetch(`${base}/api/visual/public-page?slug=home`, { redirect: 'manual' })).status;
         }
       }
@@ -150,5 +172,5 @@ const timer = setTimeout(async () => {
     statuses.error = error.message;
   }
   console.log('Startup smoke check:', JSON.stringify(statuses));
-}, 2400);
+}, 2600);
 timer.unref();
