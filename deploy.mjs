@@ -4,7 +4,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { applyFontSizeRuntimePatch } from './font-size-runtime-patch.mjs';
-import { inspectOgMediaReferences } from './inspect-og-media.mjs';
+import { applyMediaReferenceRuntimePatch } from './media-reference-runtime-patch.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const payloadDir = path.join(__dirname, 'payload-v4b');
@@ -61,7 +61,7 @@ if (visualPatchSource.includes(oldPublicLoader)) {
 }
 
 await applyFontSizeRuntimePatch(runtimeDir);
-await inspectOgMediaReferences(runtimeDir);
+await applyMediaReferenceRuntimePatch(runtimeDir);
 await import(pathToFileURL(visualPatchPath).href);
 await import(pathToFileURL(path.join(__dirname, 'visual-public-shell-patch.mjs')).href);
 await import(pathToFileURL(path.join(runtimeDir, 'cms-patch.mjs')).href);
@@ -80,13 +80,18 @@ const timer = setTimeout(async () => {
     statuses.publicVisualAsset = homeHtml.includes('/visual-public.js?v=8') ? 200 : 500;
     statuses.store = (await fetch(`${base}/store`, { redirect: 'manual' })).status;
     statuses.loginPage = (await fetch(`${base}/login`, { redirect: 'manual' })).status;
-    statuses.cmsAsset = (await fetch(`${base}/cms-admin.js`, { redirect: 'manual' })).status;
+
+    const cmsAssetResponse = await fetch(`${base}/cms-admin.js`, { redirect: 'manual' });
+    const cmsAssetSource = await cmsAssetResponse.text();
+    statuses.cmsAsset = cmsAssetResponse.status;
+    statuses.cmsMediaGuard = cmsAssetSource.includes('WAQF_PAGE_MEDIA_REFERENCE_GUARD_V1') ? 200 : 500;
 
     const visualAssetResponse = await fetch(`${base}/visual-builder.js?v=8`, { redirect: 'manual' });
     const visualAssetSource = await visualAssetResponse.text();
     statuses.visualAsset = visualAssetResponse.status;
     statuses.fontControls = visualAssetSource.includes('design.title_size') && visualAssetSource.includes('data-reset-font-sizes') ? 200 : 500;
     statuses.collectionSelectors = /(?<!\$)\$\('\[data-layout\]',root\)\.forEach/.test(visualAssetSource) ? 500 : 200;
+    statuses.visualMediaGuard = visualAssetSource.includes('WAQF_PAGE_MEDIA_REFERENCE_GUARD_V1') ? 200 : 500;
 
     const publicRendererResponse = await fetch(`${base}/visual-public.js?v=8`, { redirect: 'manual' });
     const publicRendererSource = await publicRendererResponse.text();
