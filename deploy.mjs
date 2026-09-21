@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { inspectVisualRuntime } from './inspect-visual.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const payloadDir = path.join(__dirname, 'payload-v4b');
@@ -59,9 +58,8 @@ if (visualPatchSource.includes(oldPublicLoader)) {
   throw new Error('Visual public-page loader hotfix target was not found.');
 }
 
-await inspectVisualRuntime(runtimeDir);
-
 await import(pathToFileURL(visualPatchPath).href);
+await import(pathToFileURL(path.join(__dirname, 'visual-public-shell-patch.mjs')).href);
 await import(pathToFileURL(path.join(runtimeDir, 'cms-patch.mjs')).href);
 await import(pathToFileURL(serverPath).href);
 
@@ -71,7 +69,11 @@ const timer = setTimeout(async () => {
   const statuses = {};
   try {
     statuses.health = (await fetch(`${base}/api/health`, { redirect: 'manual' })).status;
-    statuses.home = (await fetch(`${base}/`, { redirect: 'manual' })).status;
+    const homeResponse = await fetch(`${base}/`, { redirect: 'manual' });
+    const homeHtml = await homeResponse.text();
+    statuses.home = homeResponse.status;
+    statuses.publicVisualShell = homeHtml.includes('data-waqf-visual-shell="1"') ? 200 : 500;
+    statuses.publicVisualAsset = homeHtml.includes('/visual-public.js?v=7') ? 200 : 500;
     statuses.store = (await fetch(`${base}/store`, { redirect: 'manual' })).status;
     statuses.loginPage = (await fetch(`${base}/login`, { redirect: 'manual' })).status;
     statuses.cmsAsset = (await fetch(`${base}/cms-admin.js`, { redirect: 'manual' })).status;
