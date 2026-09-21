@@ -31,8 +31,20 @@ async function loadFixedModule() {
 
   const fixedPath = path.join('/tmp', 'waqf-header-runtime-patch-fixed.mjs');
   await fs.writeFile(fixedPath, source);
-  loadedModule = await import(`${pathToFileURL(fixedPath).href}?v=5`);
+  loadedModule = await import(`${pathToFileURL(fixedPath).href}?v=6`);
   return loadedModule;
+}
+
+async function repairGeneratedBuilder(runtimeDir) {
+  const filePath = path.join(runtimeDir, 'visual-builder.js');
+  let source = await fs.readFile(filePath, 'utf8');
+  const brokenToggle = "onclick=\"this.closest('.waqf-custom-header').classList.toggle('is-mobile-open')\"";
+  const safeToggle = "onclick=\"this.closest(&quot;.waqf-custom-header&quot;).classList.toggle(&quot;is-mobile-open&quot;)\"";
+  source = source.replaceAll(brokenToggle, safeToggle);
+  if (source.includes(brokenToggle)) {
+    throw new Error('Visual editor header toggle repair was not applied.');
+  }
+  await fs.writeFile(filePath, source);
 }
 
 function validateBrowserAssets(runtimeDir) {
@@ -46,6 +58,7 @@ function validateBrowserAssets(runtimeDir) {
 export async function applyHeaderRuntimePatch(runtimeDir) {
   const module = await loadFixedModule();
   const result = await module.applyHeaderRuntimePatch(runtimeDir);
+  await repairGeneratedBuilder(runtimeDir);
   validateBrowserAssets(runtimeDir);
   return result;
 }
