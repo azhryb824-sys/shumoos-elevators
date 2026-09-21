@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -30,11 +31,21 @@ async function loadFixedModule() {
 
   const fixedPath = path.join('/tmp', 'waqf-header-runtime-patch-fixed.mjs');
   await fs.writeFile(fixedPath, source);
-  loadedModule = await import(`${pathToFileURL(fixedPath).href}?v=4`);
+  loadedModule = await import(`${pathToFileURL(fixedPath).href}?v=5`);
   return loadedModule;
+}
+
+function validateBrowserAssets(runtimeDir) {
+  for (const file of ['visual-builder.js', 'visual-public.js']) {
+    execFileSync(process.execPath, ['--check', path.join(runtimeDir, file)], {
+      stdio: 'inherit',
+    });
+  }
 }
 
 export async function applyHeaderRuntimePatch(runtimeDir) {
   const module = await loadFixedModule();
-  return module.applyHeaderRuntimePatch(runtimeDir);
+  const result = await module.applyHeaderRuntimePatch(runtimeDir);
+  validateBrowserAssets(runtimeDir);
+  return result;
 }
