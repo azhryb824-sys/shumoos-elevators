@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { applySectionTypesRuntimePatch } from './section-types-runtime-patch.mjs';
 
 const MARKER = 'WAQF_PAGE_MEDIA_REFERENCE_GUARD_V1';
 
@@ -47,4 +48,6 @@ export async function applyMediaReferenceRuntimePatch(runtimeDir) {
     cmsApi = replaceRequired(cmsApi, oldConversion, newConversion, 'CMS API payload normalization');
     await fs.writeFile(cmsApiPath, cmsApi);
   }
+
+  await applySectionTypesRuntimePatch(runtimeDir);
 }
