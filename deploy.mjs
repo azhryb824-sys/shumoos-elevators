@@ -77,7 +77,7 @@ const timer = setTimeout(async () => {
     const homeHtml = await homeResponse.text();
     statuses.home = homeResponse.status;
     statuses.publicVisualShell = homeHtml.includes('data-waqf-visual-shell="1"') ? 200 : 500;
-    statuses.publicVisualAsset = homeHtml.includes('/visual-public.js?v=8') ? 200 : 500;
+    statuses.publicVisualAsset = homeHtml.includes('/visual-public.js?v=9') ? 200 : 500;
     statuses.store = (await fetch(`${base}/store`, { redirect: 'manual' })).status;
     statuses.loginPage = (await fetch(`${base}/login`, { redirect: 'manual' })).status;
 
@@ -86,22 +86,25 @@ const timer = setTimeout(async () => {
     statuses.cmsAsset = cmsAssetResponse.status;
     statuses.cmsMediaGuard = cmsAssetSource.includes('WAQF_PAGE_MEDIA_REFERENCE_GUARD_V1') ? 200 : 500;
 
-    const visualAssetResponse = await fetch(`${base}/visual-builder.js?v=8`, { redirect: 'manual' });
+    const visualAssetResponse = await fetch(`${base}/visual-builder.js?v=9`, { redirect: 'manual' });
     const visualAssetSource = await visualAssetResponse.text();
     statuses.visualAsset = visualAssetResponse.status;
     statuses.fontControls = visualAssetSource.includes('design.title_size') && visualAssetSource.includes('data-reset-font-sizes') ? 200 : 500;
     statuses.collectionSelectors = /(?<!\$)\$\('\[data-layout\]',root\)\.forEach/.test(visualAssetSource) ? 500 : 200;
     statuses.visualMediaGuard = visualAssetSource.includes('WAQF_PAGE_MEDIA_REFERENCE_GUARD_V1') ? 200 : 500;
+    statuses.sectionTypes = visualAssetSource.includes('WAQF_VISUAL_SECTION_TYPES_V1') && visualAssetSource.includes("partners:['الشركاء'") && visualAssetSource.includes("steps:['خطوات العمل'") ? 200 : 500;
 
-    const publicRendererResponse = await fetch(`${base}/visual-public.js?v=8`, { redirect: 'manual' });
+    const publicRendererResponse = await fetch(`${base}/visual-public.js?v=9`, { redirect: 'manual' });
     const publicRendererSource = await publicRendererResponse.text();
     statuses.publicRenderer = publicRendererResponse.status;
     statuses.fontRenderer = publicRendererSource.includes('wb-font-title') && publicRendererSource.includes('--section-title-size') ? 200 : 500;
+    statuses.sectionRenderer = publicRendererSource.includes('renderPartners') && publicRendererSource.includes('renderSteps') && publicRendererSource.includes('renderTestimonials') ? 200 : 500;
 
-    const publicCssResponse = await fetch(`${base}/visual-public.css?v=8`, { redirect: 'manual' });
+    const publicCssResponse = await fetch(`${base}/visual-public.css?v=9`, { redirect: 'manual' });
     const publicCssSource = await publicCssResponse.text();
     statuses.publicCss = publicCssResponse.status;
     statuses.fontCss = publicCssSource.includes('WAQF_VISUAL_FONT_CONTROLS_V1') ? 200 : 500;
+    statuses.sectionCss = publicCssSource.includes('WAQF_VISUAL_SECTION_TYPES_V1') && publicCssSource.includes('.wb-partners-grid') ? 200 : 500;
 
     if (process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD) {
       const loginResponse = await fetch(`${base}/api/login`, {
@@ -121,7 +124,7 @@ const timer = setTimeout(async () => {
         const designerStatusResponse = await fetch(`${base}/admin/designer`, { redirect: 'manual', headers: { Cookie: cookie } });
         const designerStatusHtml = await designerStatusResponse.text();
         statuses.designer = designerStatusResponse.status;
-        statuses.designerFontAssets = designerStatusHtml.includes('/visual-builder.js?v=8') && designerStatusHtml.includes('/visual-public.css?v=8') ? 200 : 500;
+        statuses.designerAssets = designerStatusHtml.includes('/visual-builder.js?v=9') && designerStatusHtml.includes('/visual-public.css?v=9') ? 200 : 500;
 
         const cmsTokenMatch = adminHtml.match(/window\.WAQF_CMS_TOKEN=("(?:\\.|[^"\\])*")/);
         if (cmsTokenMatch) {
