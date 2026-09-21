@@ -4,6 +4,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { applyFontSizeRuntimePatch } from './font-size-runtime-patch.mjs';
+import { inspectOgMediaReferences } from './inspect-og-media.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const payloadDir = path.join(__dirname, 'payload-v4b');
@@ -60,6 +61,7 @@ if (visualPatchSource.includes(oldPublicLoader)) {
 }
 
 await applyFontSizeRuntimePatch(runtimeDir);
+await inspectOgMediaReferences(runtimeDir);
 await import(pathToFileURL(visualPatchPath).href);
 await import(pathToFileURL(path.join(__dirname, 'visual-public-shell-patch.mjs')).href);
 await import(pathToFileURL(path.join(runtimeDir, 'cms-patch.mjs')).href);
