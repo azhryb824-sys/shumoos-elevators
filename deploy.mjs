@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { applyFontSizeRuntimePatch } from './font-size-runtime-patch.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const payloadDir = path.join(__dirname, 'payload-v4b');
@@ -58,6 +59,7 @@ if (visualPatchSource.includes(oldPublicLoader)) {
   throw new Error('Visual public-page loader hotfix target was not found.');
 }
 
+await applyFontSizeRuntimePatch(runtimeDir);
 await import(pathToFileURL(visualPatchPath).href);
 await import(pathToFileURL(path.join(__dirname, 'visual-public-shell-patch.mjs')).href);
 await import(pathToFileURL(path.join(runtimeDir, 'cms-patch.mjs')).href);
@@ -73,12 +75,25 @@ const timer = setTimeout(async () => {
     const homeHtml = await homeResponse.text();
     statuses.home = homeResponse.status;
     statuses.publicVisualShell = homeHtml.includes('data-waqf-visual-shell="1"') ? 200 : 500;
-    statuses.publicVisualAsset = homeHtml.includes('/visual-public.js?v=7') ? 200 : 500;
+    statuses.publicVisualAsset = homeHtml.includes('/visual-public.js?v=8') ? 200 : 500;
     statuses.store = (await fetch(`${base}/store`, { redirect: 'manual' })).status;
     statuses.loginPage = (await fetch(`${base}/login`, { redirect: 'manual' })).status;
     statuses.cmsAsset = (await fetch(`${base}/cms-admin.js`, { redirect: 'manual' })).status;
-    statuses.visualAsset = (await fetch(`${base}/visual-builder.js`, { redirect: 'manual' })).status;
-    statuses.publicRenderer = (await fetch(`${base}/visual-public.js`, { redirect: 'manual' })).status;
+
+    const visualAssetResponse = await fetch(`${base}/visual-builder.js?v=8`, { redirect: 'manual' });
+    const visualAssetSource = await visualAssetResponse.text();
+    statuses.visualAsset = visualAssetResponse.status;
+    statuses.fontControls = visualAssetSource.includes('design.title_size') && visualAssetSource.includes('data-reset-font-sizes') ? 200 : 500;
+
+    const publicRendererResponse = await fetch(`${base}/visual-public.js?v=8`, { redirect: 'manual' });
+    const publicRendererSource = await publicRendererResponse.text();
+    statuses.publicRenderer = publicRendererResponse.status;
+    statuses.fontRenderer = publicRendererSource.includes('wb-font-title') && publicRendererSource.includes('--section-title-size') ? 200 : 500;
+
+    const publicCssResponse = await fetch(`${base}/visual-public.css?v=8`, { redirect: 'manual' });
+    const publicCssSource = await publicCssResponse.text();
+    statuses.publicCss = publicCssResponse.status;
+    statuses.fontCss = publicCssSource.includes('WAQF_VISUAL_FONT_CONTROLS_V1') ? 200 : 500;
 
     if (process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD) {
       const loginResponse = await fetch(`${base}/api/login`, {
@@ -95,7 +110,10 @@ const timer = setTimeout(async () => {
         const adminHtml = await adminResponse.text();
         statuses.cmsInjected = adminHtml.includes('cmsStudioMount') ? 200 : 500;
         statuses.visualLauncher = adminHtml.includes('vb-visual-launcher') ? 200 : 500;
-        statuses.designer = (await fetch(`${base}/admin/designer`, { redirect: 'manual', headers: { Cookie: cookie } })).status;
+        const designerStatusResponse = await fetch(`${base}/admin/designer`, { redirect: 'manual', headers: { Cookie: cookie } });
+        const designerStatusHtml = await designerStatusResponse.text();
+        statuses.designer = designerStatusResponse.status;
+        statuses.designerFontAssets = designerStatusHtml.includes('/visual-builder.js?v=8') && designerStatusHtml.includes('/visual-public.css?v=8') ? 200 : 500;
 
         const cmsTokenMatch = adminHtml.match(/window\.WAQF_CMS_TOKEN=("(?:\\.|[^"\\])*")/);
         if (cmsTokenMatch) {
@@ -106,9 +124,7 @@ const timer = setTimeout(async () => {
           })).status;
         }
 
-        const designerResponse = await fetch(`${base}/admin/designer`, { redirect: 'manual', headers: { Cookie: cookie } });
-        const designerHtml = await designerResponse.text();
-        const visualTokenMatch = designerHtml.match(/window\.WAQF_VISUAL_TOKEN=("(?:\\.|[^"\\])*")/);
+        const visualTokenMatch = designerStatusHtml.match(/window\.WAQF_VISUAL_TOKEN=("(?:\\.|[^"\\])*")/);
         if (visualTokenMatch) {
           const visualToken = JSON.parse(visualTokenMatch[1]);
           statuses.visualBootstrap = (await fetch(`${base}/api/visual/bootstrap`, {
