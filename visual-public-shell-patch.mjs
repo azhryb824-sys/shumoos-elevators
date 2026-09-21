@@ -96,7 +96,7 @@ function shell(page, chrome) {
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="icon" href="/assets/logo.png" type="image/webp">
-<link rel="stylesheet" href="/visual-public.css?v=8">
+<link rel="stylesheet" href="/visual-public.css?v=9">
 <style>
 :root{--wb-primary:${esc(primary)};--wb-accent:${esc(accent)};--wb-bg:${esc(background)};--wb-surface:${esc(surface)};--wb-text:${esc(text)};--wb-muted:${esc(muted)}}
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--wb-bg);color:var(--wb-text);font-family:'Cairo',Tahoma,Arial,sans-serif}.waqf-shell-header{position:sticky;top:0;z-index:1000;background:color-mix(in srgb,var(--wb-surface) 94%,transparent);border-bottom:1px solid color-mix(in srgb,var(--wb-accent) 24%,transparent);backdrop-filter:blur(15px)}.waqf-shell-nav{width:min(1180px,calc(100% - 32px));min-height:84px;margin:auto;display:flex;align-items:center;gap:24px}.waqf-shell-brand{display:flex;align-items:center;gap:12px;margin-left:auto;text-decoration:none;color:var(--wb-primary)}.waqf-shell-brand img{width:66px;height:66px;object-fit:contain}.waqf-shell-brand strong{display:block;font-size:18px}.waqf-shell-brand small{display:block;color:var(--wb-accent)}.waqf-shell-links{display:flex;align-items:center;gap:18px;font-size:14px;font-weight:800}.waqf-shell-links a{text-decoration:none;color:var(--wb-text)}.waqf-shell-links a:hover{color:var(--wb-accent)}.waqf-shell-store{border-radius:12px;padding:10px 16px;background:var(--wb-accent);color:#fff!important}.waqf-shell-footer{background:#081d30;color:#d7e1e8;padding:42px 16px 22px}.waqf-shell-footer-inner{width:min(1180px,100%);margin:auto;display:grid;grid-template-columns:2fr 1fr;gap:34px}.waqf-shell-footer h3{color:#fff;margin:0 0 8px}.waqf-shell-footer p{color:#aebec9}.waqf-shell-footer a{display:inline-block;color:#d7e1e8;text-decoration:none;margin:5px 0 5px 14px}.waqf-shell-copy{width:min(1180px,100%);margin:25px auto 0;border-top:1px solid rgba(255,255,255,.1);padding-top:16px;color:#8fa2b0;font-size:12px}.waqf-shell-loading{min-height:55vh;display:grid;place-items:center;color:var(--wb-muted)}
@@ -107,7 +107,7 @@ function shell(page, chrome) {
 <header class="waqf-shell-header"><nav class="waqf-shell-nav"><a class="waqf-shell-brand" href="${homeUrl}"><img src="/assets/logo.png" alt="${esc(site.name || 'وقف الأثر الجميل')}"><span><strong>${esc(site.name || 'وقف الأثر الجميل')}</strong><small>${esc(site.city || 'مكة المكرمة')}</small></span></a><div class="waqf-shell-links">${headerLinks}<a class="waqf-shell-store" href="/store">المتجر</a></div></nav></header>
 <main id="visualPageRoot"><div class="waqf-shell-loading">جارٍ تحميل الصفحة…</div></main>
 <footer class="waqf-shell-footer"><div class="waqf-shell-footer-inner"><div><h3>${esc(site.name || 'وقف الأثر الجميل')}</h3><p>${esc(site.footer_text || site.tagline || '')}</p></div><div>${footerLinks}</div></div><div class="waqf-shell-copy">© ${new Date().getFullYear()} ${esc(site.name || 'وقف الأثر الجميل')}</div></footer>
-<script defer src="/visual-public.js?v=8"></script>
+<script defer src="/visual-public.js?v=9"></script>
 </body></html>`;
 }
 
